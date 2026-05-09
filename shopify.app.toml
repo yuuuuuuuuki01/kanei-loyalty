@@ -1,0 +1,15 @@
+client_id = "668e56ae7778095f35d87e73db5236b0"
+name = "金井ポイントカード"
+handle = "dev-tomoya-keel-develop"
+application_url = "https://kanei-loyalty.vercel.app"
+
+[auth]
+redirect_urls = [
+  "https://kanei-loyalty.vercel.app/api/auth/callback"
+]
+
+[access_scopes]
+scopes = "read_customers,write_customers"
+
+[webhooks]
+api_version = "2025-01"

@@ -1,0 +1,21 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "51f9315d7d84cf7bd47de6edd4c41e60"
+name = "金井ポイントカード"
+application_url = "https://kanei-loyalty.vercel.app"
+embedded = false
+handle = "dev-tomoya-keel-develop"
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-01"
+
+[access_scopes]
+scopes = "read_customers,write_customers"
+
+[auth]
+redirect_urls = [
+  "https://kanei-loyalty.vercel.app/api/auth/callback"
+]
