@@ -23,6 +23,13 @@ export default function Home() {
           >
             スタッフ用（スタンプ付与）
           </Link>
+
+          <Link
+            href="/store-qr"
+            className="block w-full py-3 text-gray-500 text-sm font-medium hover:text-amber-800 transition"
+          >
+            店頭QRコード印刷
+          </Link>
         </div>
 
         <p className="text-xs text-gray-400">

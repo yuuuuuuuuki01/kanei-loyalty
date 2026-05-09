@@ -1,95 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
+interface PendingRequest {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  created_at: string;
+}
+
 export default function StaffPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [customer, setCustomer] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [pending, setPending] = useState<PendingRequest[]>([]);
+  const [activeRequest, setActiveRequest] = useState<PendingRequest | null>(null);
   const [amount, setAmount] = useState("");
   const [staffName, setStaffName] = useState("");
-  const [result, setResult] = useState<{ stamps_added: number; new_stamps: number; card_completed: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [result, setResult] = useState<{ stamps_added: number; new_stamps: number; card_completed: boolean } | null>(null);
 
-  // 新規会員登録
-  const [showRegister, setShowRegister] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newPhone, setNewPhone] = useState("");
+  // リアルタイムでpendingリクエストを監視
+  useEffect(() => {
+    // 初回取得
+    supabase
+      .from("scan_events")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setPending(data);
+      });
 
-  async function searchCustomer() {
-    setError("");
-    setCustomer(null);
-    setResult(null);
+    // リアルタイム購読
+    const channel = supabase
+      .channel("staff-listener")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "scan_events", filter: "status=eq.pending" },
+        (payload) => {
+          const newReq = payload.new as PendingRequest;
+          setPending((prev) => [newReq, ...prev]);
+        }
+      )
+      .subscribe();
 
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return;
+    return () => { channel.unsubscribe(); };
+  }, []);
 
-    const { data } = await supabase
-      .from("loyalty_customers")
-      .select("id, name, email")
-      .or(`email.ilike.%${q}%,name.ilike.%${q}%,phone.ilike.%${q}%`)
-      .limit(1)
-      .single();
-
-    if (data) {
-      setCustomer(data);
-    } else {
-      setError("会員が見つかりません");
-    }
-  }
-
-  async function addPurchase() {
-    if (!customer || !amount) return;
+  async function approve() {
+    if (!activeRequest || !amount) return;
     setLoading(true);
-    setError("");
     setResult(null);
 
-    const { data, error: rpcError } = await supabase.rpc("add_purchase", {
-      p_customer_id: customer.id,
+    // スタンプ付与RPC呼び出し
+    const { data, error } = await supabase.rpc("add_purchase", {
+      p_customer_id: activeRequest.customer_id,
       p_amount: parseInt(amount, 10),
       p_staff_name: staffName || null,
     });
 
-    if (rpcError) {
-      setError("スタンプ付与に失敗しました: " + rpcError.message);
+    if (error) {
+      alert("付与に失敗しました: " + error.message);
     } else {
       setResult(data);
-      setAmount("");
+      // scan_eventをapprovedに更新
+      await supabase
+        .from("scan_events")
+        .update({ status: "approved", amount: parseInt(amount, 10) })
+        .eq("id", activeRequest.id);
+      // pendingリストから除去
+      setPending((prev) => prev.filter((p) => p.id !== activeRequest.id));
     }
     setLoading(false);
   }
 
-  async function registerCustomer() {
-    if (!newName || !newEmail) return;
-    setLoading(true);
-    setError("");
-
-    const { data, error: insertError } = await supabase
-      .from("loyalty_customers")
-      .insert({ name: newName.trim(), email: newEmail.trim().toLowerCase(), phone: newPhone.trim() || null })
-      .select("id, name, email")
-      .single();
-
-    if (insertError) {
-      setError("登録に失敗しました: " + insertError.message);
-    } else if (data) {
-      setCustomer(data);
-      setShowRegister(false);
-      setNewName("");
-      setNewEmail("");
-      setNewPhone("");
+  function dismiss() {
+    if (activeRequest) {
+      supabase
+        .from("scan_events")
+        .update({ status: "dismissed" })
+        .eq("id", activeRequest.id)
+        .then(() => {
+          setPending((prev) => prev.filter((p) => p.id !== activeRequest.id));
+        });
     }
-    setLoading(false);
+    setActiveRequest(null);
+    setResult(null);
+    setAmount("");
   }
+
+  function handleKeypad(val: string) {
+    if (val === "C") { setAmount(""); return; }
+    if (val === "←") { setAmount((p) => p.slice(0, -1)); return; }
+    setAmount((p) => p + val);
+  }
+
+  const previewStamps = amount ? Math.floor(parseInt(amount, 10) / 500) : 0;
 
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-xl font-black text-gray-800">スタッフ用 スタンプ付与</h1>
-          <p className="text-sm text-gray-500 mt-1">金井酒造店 直売所</p>
+        <div className="text-center mb-6">
+          <h1 className="text-xl font-black text-gray-800">スタッフ用</h1>
+          <p className="text-sm text-gray-500">金井酒造店 直売所</p>
         </div>
 
         {/* 担当者名 */}
@@ -104,114 +116,100 @@ export default function StaffPage() {
           />
         </div>
 
-        {/* 会員検索 */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
-          <label className="block text-xs font-bold text-gray-500">会員検索</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && searchCustomer()}
-              placeholder="名前・メール・電話番号"
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <button
-              onClick={searchCustomer}
-              className="px-4 py-2 bg-amber-800 text-white rounded-lg text-sm font-bold hover:bg-amber-900"
-            >
-              検索
-            </button>
-          </div>
-          <button
-            onClick={() => setShowRegister(!showRegister)}
-            className="text-sm text-amber-700 font-bold hover:underline"
-          >
-            {showRegister ? "▲ 閉じる" : "＋ 新規会員登録"}
-          </button>
+        {/* 待ちリクエスト一覧 */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">
+            スタンプ申請
+            {pending.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-black rounded-full animate-pulse">
+                {pending.length}
+              </span>
+            )}
+          </h2>
+
+          {pending.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <p className="text-3xl mb-2">📱</p>
+              <p className="text-sm">お客様のスタンプ申請を待っています...</p>
+              <p className="text-xs mt-1">お客様がQRコードを読み取ると、ここに表示されます</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pending.map((req) => (
+                <button
+                  key={req.id}
+                  onClick={() => { setActiveRequest(req); setResult(null); setAmount(""); }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                    activeRequest?.id === req.id
+                      ? "border-amber-400 bg-amber-50"
+                      : "border-gray-100 hover:border-amber-200 hover:bg-amber-50/50"
+                  }`}
+                >
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-800 font-black text-sm">
+                    {req.customer_name.slice(0, 1)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-800 text-sm">{req.customer_name}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(req.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">対応する</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* 新規登録フォーム */}
-        {showRegister && (
-          <div className="bg-amber-50 rounded-xl p-4 mb-4 space-y-3 border border-amber-200">
-            <h3 className="text-sm font-bold text-amber-800">新規会員登録</h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="お名前"
-              className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <input
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="メールアドレス"
-              className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <input
-              type="tel"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              placeholder="電話番号（任意）"
-              className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <button
-              onClick={registerCustomer}
-              disabled={loading || !newName || !newEmail}
-              className="w-full py-2 bg-amber-800 text-white rounded-lg text-sm font-bold hover:bg-amber-900 disabled:opacity-50"
-            >
-              登録
-            </button>
-          </div>
-        )}
-
-        {/* 選択された会員 */}
-        {customer && (
-          <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-4">
+        {/* 金額入力 + 承認パネル */}
+        {activeRequest && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-4 space-y-4 border-2 border-amber-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-gray-800">{customer.name}</p>
-                <p className="text-xs text-gray-400">{customer.email}</p>
+                <p className="font-black text-gray-800">{activeRequest.customer_name}</p>
+                <p className="text-xs text-gray-400">スタンプ申請</p>
               </div>
-              <button
-                onClick={() => { setCustomer(null); setResult(null); }}
-                className="text-xs text-gray-400 hover:text-gray-600"
-              >
-                変更
+              <button onClick={dismiss} className="text-xs text-gray-400 hover:text-red-500 font-bold">
+                却下
               </button>
             </div>
 
-            {/* 金額入力 */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">購入金額（税込）</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">¥</span>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addPurchase()}
-                    placeholder="1500"
-                    min="0"
-                    className="w-full pl-8 pr-3 py-3 border border-gray-200 rounded-lg text-lg font-bold focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-                </div>
-                <button
-                  onClick={addPurchase}
-                  disabled={loading || !amount || parseInt(amount) <= 0}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-black text-lg hover:bg-green-700 disabled:opacity-50 transition"
-                >
-                  {loading ? "..." : "付与"}
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                {amount && parseInt(amount) > 0
-                  ? `→ ${Math.floor(parseInt(amount) / 500)} スタンプ付与`
-                  : "500円ごとに1スタンプ"}
+            {/* 金額表示 */}
+            <div className="bg-gray-50 rounded-xl p-4 text-center">
+              <p className="text-xs font-bold text-gray-400 mb-1">購入金額</p>
+              <p className="text-4xl font-black text-gray-800">
+                ¥{amount ? parseInt(amount, 10).toLocaleString() : "0"}
+              </p>
+              <p className="text-sm text-amber-600 font-bold mt-1">
+                → {previewStamps} スタンプ
               </p>
             </div>
+
+            {/* テンキー */}
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","C","0","←"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => handleKeypad(key)}
+                  className={`py-4 rounded-xl font-black text-xl transition active:scale-95 ${
+                    key === "C" || key === "←"
+                      ? "bg-gray-100 text-gray-500 text-base"
+                      : "bg-white border border-gray-200 text-gray-800 shadow-sm hover:shadow"
+                  }`}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+
+            {/* 承認ボタン */}
+            <button
+              onClick={approve}
+              disabled={loading || !amount || parseInt(amount, 10) <= 0}
+              className="w-full py-4 bg-green-600 text-white rounded-xl font-black text-lg hover:bg-green-700 disabled:opacity-50 transition active:scale-[0.98]"
+            >
+              {loading ? "処理中..." : `スタンプ付与（${previewStamps}個）`}
+            </button>
 
             {/* 付与結果 */}
             {result && (
@@ -220,7 +218,7 @@ export default function StaffPage() {
                   <>
                     <p className="text-3xl font-black text-green-700">+{result.stamps_added}</p>
                     <p className="text-sm font-bold text-green-600">
-                      スタンプ付与（合計 {result.new_stamps}個）
+                      スタンプ付与完了（合計 {result.new_stamps}個）
                     </p>
                   </>
                 ) : (
@@ -231,12 +229,16 @@ export default function StaffPage() {
                     🎉 カード完了！ 新しいカードに切り替わりました
                   </p>
                 )}
+                <button
+                  onClick={() => { setActiveRequest(null); setResult(null); setAmount(""); }}
+                  className="mt-3 px-4 py-2 bg-white text-gray-600 rounded-lg text-sm font-bold border border-gray-200"
+                >
+                  完了
+                </button>
               </div>
             )}
           </div>
         )}
-
-        {error && <p className="text-red-500 text-sm text-center mt-4">{error}</p>}
       </div>
     </main>
   );

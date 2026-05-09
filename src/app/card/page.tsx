@@ -7,6 +7,7 @@ import type { RankName } from "@/lib/types";
 import { RANK_CONFIG } from "@/lib/rank";
 
 interface CardData {
+  customer_id: string;
   customer_name: string;
   customer_email: string;
   card_number: number;
@@ -22,6 +23,7 @@ export default function CardPage() {
   const [card, setCard] = useState<CardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [stampRequested, setStampRequested] = useState(false);
 
   async function loadCard(customerEmail: string) {
     setLoading(true);
@@ -65,6 +67,7 @@ export default function CardPage() {
         .single();
 
       setCard({
+        customer_id: customer.id,
         customer_name: customer.name,
         customer_email: customer.email,
         card_number: activeCard?.card_number ?? 1,
@@ -89,6 +92,32 @@ export default function CardPage() {
       loadCard(e);
     }
   }, []);
+
+  async function requestStamp() {
+    if (!card) return;
+    setStampRequested(true);
+    await supabase.from("scan_events").insert({
+      customer_id: card.customer_id,
+      customer_name: card.customer_name,
+      status: "pending",
+    });
+    // リアルタイムで承認を待つ
+    const channel = supabase
+      .channel("stamp-response")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "scan_events", filter: `customer_id=eq.${card.customer_id}` },
+        (payload) => {
+          if (payload.new.status === "approved") {
+            setStampRequested(false);
+            // カード再読み込み
+            loadCard(card.customer_email);
+            channel.unsubscribe();
+          }
+        }
+      )
+      .subscribe();
+  }
 
   const stamps = card?.stamps_earned ?? 0;
   const rankCfg = card ? RANK_CONFIG[card.rank] : RANK_CONFIG.bronze;
@@ -242,6 +271,24 @@ export default function CardPage() {
                 );
               })}
             </div>
+
+            {/* スタンプ申請ボタン */}
+            <button
+              onClick={requestStamp}
+              disabled={stampRequested}
+              className={`w-full py-4 rounded-2xl font-black text-lg transition shadow-lg ${
+                stampRequested
+                  ? "bg-green-100 text-green-700 border-2 border-green-300"
+                  : "bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]"
+              }`}
+            >
+              {stampRequested ? "✓ スタンプ申請中..." : "スタンプをもらう"}
+            </button>
+            {stampRequested && (
+              <p className="text-center text-sm text-green-600 animate-pulse">
+                スタッフが確認中です。しばらくお待ちください。
+              </p>
+            )}
 
             {/* ECリンク */}
             <a
