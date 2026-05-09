@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getSession, clearSession } from "@/lib/session";
 import { STAMPS_PER_CARD, REWARDS, STAMP_UNIT } from "@/lib/types";
 import type { RankName } from "@/lib/types";
 import { RANK_CONFIG } from "@/lib/rank";
@@ -83,13 +84,12 @@ export default function CardPage() {
     setLoading(false);
   }
 
-  // URLパラメータからemailを取得
+  // セッションからログイン状態を復元
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const e = params.get("email");
-    if (e) {
-      setEmail(e);
-      loadCard(e);
+    const session = getSession();
+    if (session) {
+      setEmail(session.email);
+      loadCard(session.email);
     }
   }, []);
 
@@ -132,27 +132,31 @@ export default function CardPage() {
           <p className="text-sm text-amber-700 mt-1">ポイントカード</p>
         </div>
 
-        {/* メール入力（未ログイン時） */}
-        {!card && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 space-y-4">
-            <label className="block text-sm font-bold text-gray-700">
-              メールアドレスで確認
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <button
-              onClick={() => loadCard(email)}
-              disabled={loading || !email}
-              className="w-full py-3 bg-amber-800 text-white rounded-xl font-bold hover:bg-amber-900 transition disabled:opacity-50"
+        {/* 未ログイン時 */}
+        {!card && !loading && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6 text-center">
+            <div className="space-y-2">
+              <p className="text-4xl">🍶</p>
+              <h2 className="text-lg font-bold text-gray-800">ポイントカードを始めよう</h2>
+              <p className="text-sm text-gray-500">
+                アカウントでログインすると<br />スタンプカードが表示されます
+              </p>
+            </div>
+            <a
+              href="/api/auth/shopify"
+              className="block w-full py-4 bg-amber-800 text-white rounded-xl font-bold text-lg hover:bg-amber-900 transition shadow-lg"
             >
-              {loading ? "読み込み中..." : "カードを表示"}
-            </button>
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+              ログイン / 新規登録
+            </a>
+            <p className="text-xs text-gray-400">
+              オンラインショップのアカウントでログインできます
+            </p>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+          </div>
+        )}
+        {loading && !card && (
+          <div className="text-center py-12 text-gray-400">
+            <p className="animate-pulse">読み込み中...</p>
           </div>
         )}
 
@@ -300,12 +304,12 @@ export default function CardPage() {
               オンラインショップでお買い物 →
             </a>
 
-            {/* 別アカウント */}
+            {/* ログアウト */}
             <button
-              onClick={() => { setCard(null); setEmail(""); setError(""); }}
+              onClick={() => { clearSession(); setCard(null); setEmail(""); setError(""); }}
               className="w-full text-center text-sm text-gray-400 hover:text-gray-600"
             >
-              別のアカウントで確認
+              ログアウト
             </button>
           </div>
         )}
