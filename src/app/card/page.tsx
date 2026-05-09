@@ -25,6 +25,11 @@ export default function CardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [stampRequested, setStampRequested] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
 
   async function loadCard(customerEmail: string) {
     setLoading(true);
@@ -134,24 +139,65 @@ export default function CardPage() {
 
         {/* 未ログイン時 */}
         {!card && !loading && (
-          <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6 text-center">
-            <div className="space-y-2">
+          <div className="bg-white rounded-2xl shadow-lg p-6 space-y-5">
+            <div className="text-center space-y-2">
               <p className="text-4xl">🍶</p>
-              <h2 className="text-lg font-bold text-gray-800">ポイントカードを始めよう</h2>
+              <h2 className="text-lg font-bold text-gray-800">
+                {authMode === "login" ? "ログイン" : "新規登録"}
+              </h2>
               <p className="text-sm text-gray-500">
-                アカウントでログインすると<br />スタンプカードが表示されます
+                オンラインショップのアカウントでご利用いただけます
               </p>
             </div>
-            <a
-              href="/api/auth/shopify"
-              className="block w-full py-4 bg-amber-800 text-white rounded-xl font-bold text-lg hover:bg-amber-900 transition shadow-lg"
+
+            {authMode === "register" && (
+              <div className="flex gap-2">
+                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="姓" className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                  placeholder="名" className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+            )}
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="メールアドレス" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="パスワード" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            {authMode === "register" && (
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="電話番号（任意）" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            )}
+
+            <button
+              onClick={async () => {
+                setLoading(true); setError("");
+                try {
+                  const endpoint = authMode === "login" ? "/api/auth/shopify" : "/api/auth/register";
+                  const body = authMode === "login"
+                    ? { email, password }
+                    : { firstName, lastName, email, password, phone };
+                  const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) { setError(data.error || "エラーが発生しました"); setLoading(false); return; }
+                  // セッション保存済み → カード読み込み
+                  loadCard(email);
+                } catch { setError("通信エラーが発生しました"); setLoading(false); }
+              }}
+              disabled={loading || !email || !password || (authMode === "register" && !firstName)}
+              className="w-full py-4 bg-amber-800 text-white rounded-xl font-bold text-lg hover:bg-amber-900 transition shadow-lg disabled:opacity-50"
             >
-              ログイン / 新規登録
-            </a>
-            <p className="text-xs text-gray-400">
-              オンラインショップのアカウントでログインできます
-            </p>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+              {authMode === "login" ? "ログイン" : "登録してはじめる"}
+            </button>
+
+            <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setError(""); }}
+              className="w-full text-center text-sm text-amber-700 font-bold hover:underline">
+              {authMode === "login" ? "アカウントをお持ちでない方 → 新規登録" : "すでにアカウントをお持ちの方 → ログイン"}
+            </button>
+
+            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           </div>
         )}
         {loading && !card && (
