@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -66,6 +68,7 @@ export async function GET(req: NextRequest) {
   const phone = c.phoneNumber?.phoneNumber || null;
 
   // loyalty_customers に upsert
+  const supabaseAdmin = getSupabaseAdmin();
   const { data: customer } = await supabaseAdmin
     .from("loyalty_customers")
     .upsert(
