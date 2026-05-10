@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-const SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN || "kaneishuzo.myshopify.com";
-const STOREFRONT_TOKEN = process.env.SHOPIFY_CLIENT_SECRET!;
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
-// Shopify Storefront API で新規顧客登録
+// 新規会員登録
 export async function POST(req: NextRequest) {
   const { firstName, lastName, email, password, phone } = await req.json();
 
@@ -11,85 +16,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "必須項目を入力してください" }, { status: 400 });
   }
 
-  // customerCreate で新規登録
-  const res = await fetch(`https://${SHOP_DOMAIN}/api/2025-01/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({
-      query: `mutation customerCreate($input: CustomerCreateInput!) {
-        customerCreate(input: $input) {
-          customer { id firstName lastName email phone }
-          customerUserErrors { code field message }
-        }
-      }`,
-      variables: {
-        input: { firstName, lastName: lastName || "", email, password, phone: phone || null },
-      },
-    }),
-  });
-
-  const data = await res.json();
-  const result = data.data?.customerCreate;
-  const errors = result?.customerUserErrors;
-
-  if (errors?.length > 0) {
-    return NextResponse.json({ error: errors[0].message }, { status: 400 });
+  if (password.length < 6) {
+    return NextResponse.json({ error: "パスワードは6文字以上で設定してください" }, { status: 400 });
   }
 
-  const c = result?.customer;
-  if (!c) {
-    return NextResponse.json({ error: "登録に失敗しました" }, { status: 500 });
-  }
+  const supabase = getSupabase();
+  const emailLower = email.trim().toLowerCase();
+  const name = [firstName, lastName].filter(Boolean).join(" ");
 
-  // Supabaseにも登録
-  const { createClient } = await import("@supabase/supabase-js");
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
-
-  const { data: customer } = await supabaseAdmin
+  // 既存チェック
+  const { data: existing } = await supabase
     .from("loyalty_customers")
-    .upsert(
-      { shopify_customer_id: c.id, email: c.email, name, phone: c.phone || null },
-      { onConflict: "email" }
-    )
-    .select("id, email")
+    .select("id")
+    .eq("email", emailLower)
     .single();
 
-  // 自動ログイン
-  const loginRes = await fetch(`https://${SHOP_DOMAIN}/api/2025-01/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({
-      query: `mutation { customerAccessTokenCreate(input: { email: "${email}", password: "${password}" }) {
-        customerAccessToken { accessToken }
-        customerUserErrors { message }
-      }}`,
-    }),
-  });
+  if (existing) {
+    return NextResponse.json({ error: "このメールアドレスは既に登録されています" }, { status: 400 });
+  }
+
+  // パスワードハッシュ
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 16));
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+
+  // 顧客登録
+  const { data: customer, error } = await supabase
+    .from("loyalty_customers")
+    .insert({ email: emailLower, name, phone: phone || null, password_hash: hash })
+    .select("id, email, name")
+    .single();
+
+  if (error || !customer) {
+    return NextResponse.json({ error: "登録に失敗しました。もう一度お試しください。" }, { status: 500 });
+  }
 
   const sessionToken = Buffer.from(JSON.stringify({
-    customer_id: customer?.id,
-    email: customer?.email,
-    name,
+    customer_id: customer.id,
+    email: customer.email,
+    name: customer.name,
   })).toString("base64");
 
-  const response = NextResponse.json({ success: true, name });
+  const response = NextResponse.json({ success: true, name: customer.name });
   response.cookies.set("loyalty_session", sessionToken, {
-    httpOnly: false,
-    secure: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30,
-    path: "/",
+    httpOnly: false, secure: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 30, path: "/",
   });
 
   return response;
