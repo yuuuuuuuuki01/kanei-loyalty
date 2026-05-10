@@ -19,14 +19,6 @@ interface CardData {
   rank: RankName;
 }
 
-const RANK_GRADIENT: Record<RankName, string> = {
-  bronze: "from-amber-900 via-amber-800 to-yellow-900",
-  silver: "from-slate-600 via-slate-500 to-slate-400",
-  gold: "from-yellow-600 via-amber-500 to-yellow-400",
-  platinum: "from-cyan-800 via-sky-600 to-blue-500",
-  diamond: "from-violet-800 via-purple-600 to-fuchsia-500",
-};
-
 export default function CardPage() {
   const [email, setEmail] = useState("");
   const [card, setCard] = useState<CardData | null>(null);
@@ -44,11 +36,8 @@ export default function CardPage() {
     setError("");
     try {
       const { data: customer } = await supabase
-        .from("loyalty_customers")
-        .select("id, name, email")
-        .eq("email", customerEmail.trim().toLowerCase())
-        .single();
-
+        .from("loyalty_customers").select("id, name, email")
+        .eq("email", customerEmail.trim().toLowerCase()).single();
       if (!customer) { setError("会員が見つかりません"); setLoading(false); return; }
 
       const { data: activeCard } = await supabase
@@ -65,15 +54,10 @@ export default function CardPage() {
         .eq("customer_id", customer.id).single();
 
       setCard({
-        customer_id: customer.id,
-        customer_name: customer.name,
-        customer_email: customer.email,
-        card_number: activeCard?.card_number ?? 1,
-        total_spent: activeCard?.total_spent ?? 0,
-        stamps_earned: activeCard?.stamps_earned ?? 0,
-        rewards_claimed: activeCard?.rewards_claimed ?? [],
-        cards_completed: completedCount ?? 0,
-        rank: (rankData?.rank as RankName) ?? "bronze",
+        customer_id: customer.id, customer_name: customer.name, customer_email: customer.email,
+        card_number: activeCard?.card_number ?? 1, total_spent: activeCard?.total_spent ?? 0,
+        stamps_earned: activeCard?.stamps_earned ?? 0, rewards_claimed: activeCard?.rewards_claimed ?? [],
+        cards_completed: completedCount ?? 0, rank: (rankData?.rank as RankName) ?? "bronze",
       });
     } catch { setError("データの取得に失敗しました"); }
     setLoading(false);
@@ -106,162 +90,155 @@ export default function CardPage() {
   const nextReward = REWARDS.find((r) => !card?.rewards_claimed.includes(r.step) && r.step > stamps);
 
   return (
-    <main className="min-h-screen bg-[#0f0f0f] text-white">
-      <div className="max-w-md mx-auto px-4 py-6">
+    <main className="min-h-screen bg-[#F7FAFC]" style={{ fontFamily: '"Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Inter", sans-serif' }}>
+      <div className="max-w-md mx-auto px-5 py-6">
+
+        {/* ── ヘッダー ── */}
+        <header className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-[18px] font-bold text-[#1F2933] leading-[1.45] tracking-[0.01em]">金井酒造店</h1>
+            <p className="text-[12px] text-[#52606D] tracking-[0.03em]">ポイントカード</p>
+          </div>
+          {card && (
+            <button onClick={() => { clearSession(); setCard(null); setEmail(""); setError(""); }}
+              className="text-[12px] text-[#9AA5B1] hover:text-[#52606D] transition">
+              ログアウト
+            </button>
+          )}
+        </header>
 
         {/* ── 未ログイン ── */}
         {!card && !loading && (
-          <div className="min-h-[80vh] flex flex-col justify-center">
-            {/* ブランドヘッダー */}
-            <div className="text-center mb-10">
-              <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-700 to-amber-900 flex items-center justify-center shadow-lg shadow-amber-900/30">
-                <span className="text-3xl">🍶</span>
-              </div>
-              <h1 className="text-2xl font-black tracking-tight">金井酒造店</h1>
-              <p className="text-white/40 text-sm mt-1 tracking-widest uppercase">Members Card</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 space-y-4 border border-white/10">
-              <h2 className="text-center text-lg font-bold">
-                {authMode === "login" ? "ログイン" : "新規登録"}
+          <div className="bg-white rounded-[12px] border border-[#E5EDF5] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-6 space-y-4">
+            <div className="text-center mb-2">
+              <h2 className="text-[15px] font-bold text-[#1F2933] tracking-[0.02em]">
+                {authMode === "login" ? "ログイン" : "新規会員登録"}
               </h2>
-
-              {authMode === "register" && (
-                <div className="flex gap-2">
-                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="姓" className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500" />
-                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
-                    placeholder="名" className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500" />
-                </div>
-              )}
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="メールアドレス" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500" />
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                placeholder="パスワード" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500" />
-              {authMode === "register" && (
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  placeholder="電話番号（任意）" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500" />
-              )}
-
-              <button
-                onClick={async () => {
-                  setLoading(true); setError("");
-                  try {
-                    const endpoint = authMode === "login" ? "/api/auth/shopify" : "/api/auth/register";
-                    const body = authMode === "login" ? { email, password } : { firstName, lastName, email, password, phone };
-                    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const data = await res.json();
-                    if (!res.ok) { setError(data.error || "エラーが発生しました"); setLoading(false); return; }
-                    loadCard(email);
-                  } catch { setError("通信エラーが発生しました"); setLoading(false); }
-                }}
-                disabled={loading || !email || !password || (authMode === "register" && !firstName)}
-                className="w-full py-4 bg-gradient-to-r from-amber-700 to-amber-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-amber-800/30 hover:shadow-amber-700/50 transition-all active:scale-[0.98] disabled:opacity-40"
-              >
-                {authMode === "login" ? "ログイン" : "登録してはじめる"}
-              </button>
-
-              <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setError(""); }}
-                className="w-full text-center text-sm text-amber-400/80 hover:text-amber-300">
-                {authMode === "login" ? "アカウントをお持ちでない方 → 新規登録" : "アカウントをお持ちの方 → ログイン"}
-              </button>
-
-              {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+              <p className="text-[12px] text-[#52606D] mt-1 tracking-[0.03em]">
+                オンラインショップのアカウントをご利用ください
+              </p>
             </div>
+
+            {authMode === "register" && (
+              <div className="flex gap-3">
+                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="姓" className="flex-1 h-[40px] px-3 text-[14px] border border-[#BCCCDC] rounded-[8px] bg-white placeholder:text-[#9AA5B1] focus:outline-none focus:ring-[3px] focus:ring-[rgba(15,91,141,0.14)]" />
+                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                  placeholder="名" className="flex-1 h-[40px] px-3 text-[14px] border border-[#BCCCDC] rounded-[8px] bg-white placeholder:text-[#9AA5B1] focus:outline-none focus:ring-[3px] focus:ring-[rgba(15,91,141,0.14)]" />
+              </div>
+            )}
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="メールアドレス" className="w-full h-[40px] px-3 text-[14px] border border-[#BCCCDC] rounded-[8px] bg-white placeholder:text-[#9AA5B1] focus:outline-none focus:ring-[3px] focus:ring-[rgba(15,91,141,0.14)]" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="パスワード" className="w-full h-[40px] px-3 text-[14px] border border-[#BCCCDC] rounded-[8px] bg-white placeholder:text-[#9AA5B1] focus:outline-none focus:ring-[3px] focus:ring-[rgba(15,91,141,0.14)]" />
+            {authMode === "register" && (
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="電話番号（任意）" className="w-full h-[40px] px-3 text-[14px] border border-[#BCCCDC] rounded-[8px] bg-white placeholder:text-[#9AA5B1] focus:outline-none focus:ring-[3px] focus:ring-[rgba(15,91,141,0.14)]" />
+            )}
+
+            <button
+              onClick={async () => {
+                setLoading(true); setError("");
+                try {
+                  const endpoint = authMode === "login" ? "/api/auth/shopify" : "/api/auth/register";
+                  const body = authMode === "login" ? { email, password } : { firstName, lastName, email, password, phone };
+                  const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                  const data = await res.json();
+                  if (!res.ok) { setError(data.error || "エラーが発生しました"); setLoading(false); return; }
+                  loadCard(email);
+                } catch { setError("通信エラーが発生しました"); setLoading(false); }
+              }}
+              disabled={loading || !email || !password || (authMode === "register" && !firstName)}
+              className="w-full h-[44px] bg-[#0F5B8D] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#0A4368] transition disabled:opacity-40"
+            >
+              {authMode === "login" ? "ログイン" : "登録してはじめる"}
+            </button>
+
+            <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setError(""); }}
+              className="w-full text-center text-[12px] text-[#0F5B8D] font-bold hover:underline">
+              {authMode === "login" ? "アカウントをお持ちでない方 → 新規登録" : "アカウントをお持ちの方 → ログイン"}
+            </button>
+
+            {error && <p className="text-[#C53D3D] text-[12px] text-center">{error}</p>}
           </div>
         )}
 
         {loading && !card && (
-          <div className="min-h-[80vh] flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-[#0F5B8D] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {/* ── 会員証カード表示 ── */}
+        {/* ── カード表示 ── */}
         {card && (
-          <div className="space-y-5">
+          <div className="space-y-4">
 
-            {/* メインカード */}
-            <div className={`relative rounded-[1.5rem] overflow-hidden bg-gradient-to-br ${RANK_GRADIENT[card.rank]} p-6 shadow-2xl`}>
-              {/* 装飾 */}
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+            {/* 会員証カード */}
+            <div className="bg-white rounded-[12px] border border-[#E5EDF5] shadow-[0_1px_2px_rgba(16,24,40,0.04)] overflow-hidden">
+              {/* ランクバー */}
+              <div className="h-[6px]" style={{ background: rankCfg.border }} />
 
-              <div className="relative z-10">
-                {/* ブランド */}
-                <div className="flex items-center justify-between mb-6">
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-white/60 text-[10px] font-bold uppercase tracking-[0.2em]">Members Card</p>
-                    <h1 className="text-lg font-black tracking-tight">金井酒造店</h1>
+                    <p className="text-[18px] font-bold text-[#1F2933] leading-[1.4]">{card.customer_name}</p>
+                    <p className="text-[11px] text-[#9AA5B1] mt-0.5">{card.customer_email}</p>
                   </div>
-                  <div className="px-3 py-1.5 bg-white/20 backdrop-blur-md rounded-full">
-                    <span className="text-xs font-black uppercase tracking-wider">{rankCfg.label}</span>
-                  </div>
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: rankCfg.bg, color: rankCfg.color, border: `1px solid ${rankCfg.border}` }}>
+                    {rankCfg.label}
+                  </span>
                 </div>
 
-                {/* 会員名 */}
-                <div className="mb-6">
-                  <p className="text-2xl font-black tracking-wide">{card.customer_name}</p>
-                  <p className="text-white/50 text-xs mt-1">Card No.{card.card_number} ｜ {card.cards_completed}枚完了</p>
-                </div>
-
-                {/* プログレスバー */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-white/70">{stamps} / {STAMPS_PER_CARD} stamps</span>
-                    <span className="text-white/70">{Math.round(progress * 100)}%</span>
+                {/* プログレス */}
+                <div className="mb-3">
+                  <div className="flex justify-between text-[12px] mb-1.5">
+                    <span className="text-[#52606D] font-bold">{stamps} / {STAMPS_PER_CARD} スタンプ</span>
+                    <span className="text-[#0F5B8D] font-bold">{Math.round(progress * 100)}%</span>
                   </div>
-                  <div className="h-2 bg-black/20 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-white/80 rounded-full transition-all duration-700 ease-out"
-                      style={{ width: `${progress * 100}%` }}
-                    />
+                  <div className="h-[8px] bg-[#F2F5F7] rounded-full overflow-hidden border border-[#D9E2EC]">
+                    <div className="h-full bg-[#0F5B8D] rounded-full transition-all duration-700" style={{ width: `${progress * 100}%` }} />
                   </div>
                   {nextReward && (
-                    <p className="text-white/50 text-[11px]">
-                      次の特典「{nextReward.name}」まで あと{nextReward.step - stamps}スタンプ
+                    <p className="text-[11px] text-[#52606D] mt-1.5">
+                      次の特典「{nextReward.name}」まで あと <strong className="text-[#0F5B8D]">{nextReward.step - stamps}</strong> スタンプ
                     </p>
                   )}
+                </div>
+
+                <div className="flex gap-4 text-[11px] text-[#9AA5B1] border-t border-[#D9E2EC] pt-3">
+                  <span>カード {card.card_number}枚目</span>
+                  <span>完了 {card.cards_completed}枚</span>
+                  {carryOver > 0 && <span>繰越 ¥{carryOver}</span>}
                 </div>
               </div>
             </div>
 
             {/* スタンプグリッド */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-5 border border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-white/70 uppercase tracking-wider">Stamps</h2>
-                {carryOver > 0 && (
-                  <span className="text-[11px] text-amber-400/80">
-                    繰越 ¥{carryOver} → 次まで ¥{STAMP_UNIT - carryOver}
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-10 gap-[6px]">
+            <div className="bg-white rounded-[12px] border border-[#E5EDF5] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5">
+              <h2 className="text-[12px] font-bold text-[#52606D] uppercase tracking-[0.05em] mb-3">スタンプ</h2>
+              <div className="grid grid-cols-10 gap-[5px]">
                 {Array.from({ length: STAMPS_PER_CARD }, (_, i) => {
                   const num = i + 1;
                   const filled = num <= stamps;
                   const isReward = REWARDS.some((r) => r.step === num);
                   const rewardClaimed = card.rewards_claimed.includes(num);
 
+                  let bg = "bg-[#F2F5F7] border-[#D9E2EC]";
+                  let text = "text-[#9AA5B1]";
+                  let content = "";
+
+                  if (filled) {
+                    if (isReward && rewardClaimed) { bg = "bg-[#2F855A] border-[#2F855A]"; text = "text-white"; }
+                    else if (isReward) { bg = "bg-[#B7791F] border-[#B7791F]"; text = "text-white"; }
+                    else { bg = "bg-[#0F5B8D] border-[#0F5B8D]"; text = "text-white"; }
+                    content = isReward ? "★" : "●";
+                  } else {
+                    if (isReward) { bg = "bg-[#FFF9E6] border-[#B7791F]"; text = "text-[#B7791F]"; content = "★"; }
+                  }
+
                   return (
-                    <div
-                      key={i}
-                      className={`
-                        aspect-square rounded-lg flex items-center justify-center text-[8px] font-bold transition-all
-                        ${filled
-                          ? isReward
-                            ? rewardClaimed
-                              ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30"
-                              : "bg-amber-400 text-amber-900 shadow-md shadow-amber-400/40 animate-pulse"
-                            : "bg-white/90 text-gray-800 shadow-sm"
-                          : isReward
-                            ? "bg-amber-400/20 text-amber-400 border border-amber-400/40"
-                            : "bg-white/5 text-white/20 border border-white/5"
-                        }
-                      `}
-                    >
-                      {isReward ? "★" : filled ? "●" : ""}
+                    <div key={i} className={`aspect-square rounded-[4px] border flex items-center justify-center text-[8px] font-bold ${bg} ${text}`}>
+                      {content}
                     </div>
                   );
                 })}
@@ -269,37 +246,28 @@ export default function CardPage() {
             </div>
 
             {/* 特典一覧 */}
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-5 border border-white/10 space-y-3">
-              <h2 className="text-sm font-bold text-white/70 uppercase tracking-wider mb-3">Rewards</h2>
+            <div className="bg-white rounded-[12px] border border-[#E5EDF5] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5 space-y-2">
+              <h2 className="text-[12px] font-bold text-[#52606D] uppercase tracking-[0.05em] mb-2">特典</h2>
               {REWARDS.map((reward) => {
                 const claimed = card.rewards_claimed.includes(reward.step);
                 const reached = stamps >= reward.step;
                 return (
-                  <div
-                    key={reward.step}
-                    className={`flex items-center gap-4 p-4 rounded-xl transition-all ${
-                      claimed
-                        ? "bg-emerald-500/10 border border-emerald-500/30"
-                        : reached
-                          ? "bg-amber-500/10 border border-amber-400/30"
-                          : "bg-white/5 border border-white/5"
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${
-                      claimed ? "bg-emerald-500 text-white" : reached ? "bg-amber-400 text-amber-900" : "bg-white/10 text-white/30"
+                  <div key={reward.step} className={`flex items-center gap-3 p-3 rounded-[8px] border ${
+                    claimed ? "bg-[#F0FFF4] border-[#C6F6D5]" : reached ? "bg-[#FFFFF0] border-[#FEFCBF]" : "bg-[#F2F5F7] border-[#D9E2EC]"
+                  }`}>
+                    <div className={`w-8 h-8 rounded-[6px] flex items-center justify-center text-[12px] font-bold shrink-0 ${
+                      claimed ? "bg-[#2F855A] text-white" : reached ? "bg-[#B7791F] text-white" : "bg-[#D9E2EC] text-[#9AA5B1]"
                     }`}>
                       {claimed ? "✓" : reward.step}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-bold truncate ${claimed ? "text-emerald-400" : reached ? "text-amber-300" : "text-white/60"}`}>
-                        {reward.name}
-                      </p>
-                      <p className={`text-xs ${claimed ? "text-emerald-400/60" : "text-white/30"}`}>
+                      <p className={`text-[13px] font-bold truncate ${claimed ? "text-[#2F855A]" : "text-[#1F2933]"}`}>{reward.name}</p>
+                      <p className="text-[11px] text-[#9AA5B1]">
                         {claimed ? "交換済み" : reached ? "交換可能" : `あと ${reward.step - stamps} スタンプ`}
                       </p>
                     </div>
                     {reached && !claimed && (
-                      <div className="px-3 py-1 bg-amber-400 text-amber-900 text-[10px] font-black rounded-full uppercase">Get</div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#B7791F] text-white">交換可</span>
                     )}
                   </div>
                 );
@@ -310,37 +278,23 @@ export default function CardPage() {
             <button
               onClick={requestStamp}
               disabled={stampRequested}
-              className={`w-full py-5 rounded-2xl font-black text-lg transition-all ${
+              className={`w-full h-[48px] rounded-[8px] text-[14px] font-bold transition ${
                 stampRequested
-                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                  : "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-600/30 hover:shadow-emerald-500/50 active:scale-[0.98]"
+                  ? "bg-[#F0FFF4] text-[#2F855A] border border-[#C6F6D5]"
+                  : "bg-[#2F855A] text-white hover:bg-[#276749] active:scale-[0.99]"
               }`}
             >
               {stampRequested ? "✓ スタンプ申請中..." : "スタンプをもらう"}
             </button>
             {stampRequested && (
-              <p className="text-center text-xs text-emerald-400/70 animate-pulse">
-                スタッフが確認中です
-              </p>
+              <p className="text-center text-[11px] text-[#2F855A] animate-pulse">スタッフが確認中です</p>
             )}
 
             {/* ECリンク */}
-            <a
-              href="https://www.kaneishuzo.co.jp"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-center py-4 bg-white/5 border border-white/10 rounded-2xl text-white/70 font-bold text-sm hover:bg-white/10 hover:text-white transition-all"
-            >
+            <a href="https://www.kaneishuzo.co.jp" target="_blank" rel="noopener noreferrer"
+              className="block text-center h-[40px] leading-[40px] bg-white border border-[#BCCCDC] rounded-[8px] text-[13px] font-bold text-[#0F5B8D] hover:bg-[#E8F2F8] transition">
               オンラインショップ →
             </a>
-
-            {/* ログアウト */}
-            <button
-              onClick={() => { clearSession(); setCard(null); setEmail(""); setError(""); }}
-              className="w-full text-center text-xs text-white/20 hover:text-white/50 py-2"
-            >
-              ログアウト
-            </button>
           </div>
         )}
       </div>

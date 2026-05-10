@@ -1,9 +1,9 @@
 import type { RankName } from "./types";
 
 export const RANK_CONFIG: Record<RankName, { label: string; color: string; bg: string; border: string }> = {
-  bronze:   { label: "BRONZE",   color: "#d97706", bg: "#451a03", border: "#b45309" },
-  silver:   { label: "SILVER",   color: "#94a3b8", bg: "#1e293b", border: "#64748b" },
-  gold:     { label: "GOLD",     color: "#eab308", bg: "#422006", border: "#ca8a04" },
-  platinum: { label: "PLATINUM", color: "#38bdf8", bg: "#0c4a6e", border: "#0284c7" },
-  diamond:  { label: "DIAMOND",  color: "#c084fc", bg: "#3b0764", border: "#9333ea" },
+  bronze:   { label: "ブロンズ",   color: "#92400e", bg: "#FFFBEB", border: "#D97706" },
+  silver:   { label: "シルバー",   color: "#475569", bg: "#F1F5F9", border: "#94A3B8" },
+  gold:     { label: "ゴールド",   color: "#854D0E", bg: "#FEF9C3", border: "#CA8A04" },
+  platinum: { label: "プラチナ",   color: "#0A4368", bg: "#E8F2F8", border: "#0F5B8D" },
+  diamond:  { label: "ダイヤモンド", color: "#1F2933", bg: "#F2F5F7", border: "#1F2933" },
 };
